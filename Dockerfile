@@ -5,6 +5,7 @@ WORKDIR /app
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
+RUN chmod 644 /app/SWIFT_CODES.csv
 RUN go build -o main .
 
 # Dockerfile
@@ -23,5 +24,6 @@ FROM alpine:latest
 WORKDIR /app
 COPY --from=builder /app/main .
 COPY --from=builder /app/SWIFT_CODES.csv .
+
 EXPOSE 8080
 CMD ["/app/main"]

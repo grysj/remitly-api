@@ -12,7 +12,7 @@ services:
       - REDIS_HOST=redis
       - REDIS_PORT=6379
     volumes:
-      - ./SWIFT_CODES.csv:/app/SWIFT_CODES.csv
+      - ./${CV_PATH}:/app/${CV_PATH}
     depends_on:
       - redis
 
@@ -22,6 +22,7 @@ services:
       - redis_data:/data
       - ./redis.conf:/etc/redis.conf
     command: ["redis-server", "/etc/redis.conf"]
+
   test:
     build:
       context: .
