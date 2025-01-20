@@ -1,0 +1,41 @@
+services:
+  api:
+    build: .
+    ports:
+      - "${PORT:-8080}:8080"
+    environment:
+      - CORS_ALLOWED_ORIGINS=${CORS_ALLOWED_ORIGINS}
+      - CORS_ALLOWED_METHODS=${CORS_ALLOWED_METHODS}
+      - CORS_ALLOWED_HEADERS=${CORS_ALLOWED_HEADERS}
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - CV_PATH=${CV_PATH}
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+    volumes:
+      - ./SWIFT_CODES.csv:/app/SWIFT_CODES.csv
+    depends_on:
+      - redis
+
+  redis:
+    image: redis:alpine
+    volumes:
+      - redis_data:/data
+      - ./redis.conf:/etc/redis.conf
+    command: ["redis-server", "/etc/redis.conf"]
+  test:
+    build:
+      context: .
+      target: tester
+    environment:
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=${REDIS_PASSWORD}
+      - REDIS_TEST_DB=1
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+    command: go test -v ./...
+
+volumes:
+  redis_data:
