@@ -12,7 +12,7 @@ jobs:
       - name: Build and test
         run: |
           docker compose run --rm test go test -coverprofile=coverage.txt -covermode=atomic ./...
-          docker cp $(docker ps -aq -f name=remitly-api-test):/app/coverage.txt .
+          docker compose cp test:/app/coverage.txt .
 
       - name: Upload coverage
         uses: codecov/codecov-action@v3
