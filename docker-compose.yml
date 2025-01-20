@@ -33,6 +33,7 @@ services:
       REDIS_TEST_DB: 1
     volumes:
       - .:/app
+      - ./coverage:/coverage
     depends_on:
       - redis
     command: go test -v -coverprofile=/app/coverage.txt -covermode=atomic ./...
