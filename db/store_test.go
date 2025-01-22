@@ -42,22 +42,22 @@ func TestAddBanksToRedis(t *testing.T) {
 			},
 			wantErr: false,
 			verify: func(t *testing.T) {
-				result, err := testRedis.HGetAll(testCtx, "swiftCode:AAISALTRXXX").Result()
+				result, err := testStore.client.HGetAll(testCtx, "swiftCode:AAISALTRXXX").Result()
 				require.NoError(t, err)
 				require.NotEmpty(t, result)
 
 				var bankData GetBankByIsoResult
-				err = testRedis.HGetAll(testCtx, "swiftCode:AAISALTRXXX").Scan(&bankData)
+				err = testStore.client.HGetAll(testCtx, "swiftCode:AAISALTRXXX").Scan(&bankData)
 				require.NoError(t, err)
 				assert.Equal(t, "AL", bankData.ISO2)
 				assert.Equal(t, "UNITED BANK OF ALBANIA SH.A", bankData.Name)
 
-				members, err := testRedis.SMembers(testCtx, "idx:countryISO2:AL").Result()
+				members, err := testStore.client.SMembers(testCtx, "idx:countryISO2:AL").Result()
 				require.NoError(t, err)
 				assert.Contains(t, members, "swiftCode:AAISALTRXXX")
 
 				var bankData2 GetBankByIsoResult
-				err = testRedis.HGetAll(testCtx, "swiftCode:BAERMCMCXXX").Scan(&bankData2)
+				err = testStore.client.HGetAll(testCtx, "swiftCode:BAERMCMCXXX").Scan(&bankData2)
 				require.NoError(t, err)
 				assert.Equal(t, "MC", bankData2.ISO2)
 				assert.Equal(t, "BANK JULIUS BAER (MONACO) S.A.M.", bankData2.Name)
@@ -89,29 +89,24 @@ func TestAddBanksToRedis(t *testing.T) {
 			},
 			wantErr: false,
 			verify: func(t *testing.T) {
-
-				result1, err := testRedis.HGetAll(testCtx, "swiftCode:ABIEBGS1XXX").Result()
+				result1, err := testStore.client.HGetAll(testCtx, "swiftCode:ABIEBGS1XXX").Result()
 				require.NoError(t, err)
 				require.NotEmpty(t, result1)
-
-				result2, err := testRedis.HGetAll(testCtx, "swiftCode:ADCRBGS1XXX").Result()
+				result2, err := testStore.client.HGetAll(testCtx, "swiftCode:ADCRBGS1XXX").Result()
 				require.NoError(t, err)
 				require.NotEmpty(t, result2)
-
-				members, err := testRedis.SMembers(testCtx, "idx:countryISO2:BG").Result()
+				members, err := testStore.client.SMembers(testCtx, "idx:countryISO2:BG").Result()
 				require.NoError(t, err)
 				assert.Len(t, members, 2)
 				assert.Contains(t, members, "swiftCode:ABIEBGS1XXX")
 				assert.Contains(t, members, "swiftCode:ADCRBGS1XXX")
-
 				var bank1 GetBankByIsoResult
-				err = testRedis.HGetAll(testCtx, "swiftCode:ABIEBGS1XXX").Scan(&bank1)
+				err = testStore.client.HGetAll(testCtx, "swiftCode:ABIEBGS1XXX").Scan(&bank1)
 				require.NoError(t, err)
 				assert.Equal(t, "BG", bank1.ISO2)
 				assert.Equal(t, "ABV INVESTMENTS LTD", bank1.Name)
-
 				var bank2 GetBankByIsoResult
-				err = testRedis.HGetAll(testCtx, "swiftCode:ADCRBGS1XXX").Scan(&bank2)
+				err = testStore.client.HGetAll(testCtx, "swiftCode:ADCRBGS1XXX").Scan(&bank2)
 				require.NoError(t, err)
 				assert.Equal(t, "BG", bank2.ISO2)
 				assert.Equal(t, "ADAMANT CAPITAL PARTNERS AD", bank2.Name)
@@ -122,11 +117,11 @@ func TestAddBanksToRedis(t *testing.T) {
 			rows:    []parser.CsvRow{},
 			wantErr: false,
 			verify: func(t *testing.T) {
-				keys, err := testRedis.Keys(testCtx, "swiftCode:*").Result()
+				keys, err := testStore.client.Keys(testCtx, "swiftCode:*").Result()
 				require.NoError(t, err)
 				assert.Empty(t, keys)
 
-				keys, err = testRedis.Keys(testCtx, "idx:countryISO2:*").Result()
+				keys, err = testStore.client.Keys(testCtx, "idx:countryISO2:*").Result()
 				require.NoError(t, err)
 				assert.Empty(t, keys)
 			},
@@ -135,10 +130,10 @@ func TestAddBanksToRedis(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := testRedis.FlushDB(testCtx).Err()
+			err := testStore.client.FlushDB(testCtx).Err()
 			require.NoError(t, err)
 
-			err = AddBanksToRedis(testRedis, tt.rows)
+			err = testStore.AddBanksFromCSV(tt.rows)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -148,6 +143,9 @@ func TestAddBanksToRedis(t *testing.T) {
 
 			if tt.verify != nil {
 				tt.verify(t)
+			}
+			if err := testStore.client.FlushDB(testCtx).Err(); err != nil {
+				t.Fatalf("Failed to flush database: %v", err)
 			}
 		})
 	}
@@ -175,11 +173,11 @@ func TestAddBankToRedis(t *testing.T) {
 			wantErr: false,
 			verify: func(t *testing.T, _ Bank) {
 				bankData := &Bank{}
-				err := testRedis.HGetAll(testCtx, "swiftCode:AAISALTRXXX").Scan(bankData)
+				err := testStore.client.HGetAll(testCtx, "swiftCode:AAISALTRXXX").Scan(bankData)
 				require.NoError(t, err)
 				assert.Equal(t, "AL", bankData.ISO2)
 				assert.Equal(t, "UNITED BANK OF ALBANIA SH.A", bankData.Name)
-				keys, err := testRedis.SMembers(testCtx, "idx:countryISO2:AL").Result()
+				keys, err := testStore.client.SMembers(testCtx, "idx:countryISO2:AL").Result()
 				require.NoError(t, err)
 				assert.Contains(t, keys, "swiftCode:AAISALTRXXX")
 			},
@@ -199,12 +197,12 @@ func TestAddBankToRedis(t *testing.T) {
 			wantErr: false,
 			verify: func(t *testing.T, _ Bank) {
 				bankData := &Bank{}
-				err := testRedis.HGetAll(testCtx, "swiftCode:ABIEBGS1XXX").Scan(bankData)
+				err := testStore.client.HGetAll(testCtx, "swiftCode:ABIEBGS1XXX").Scan(bankData)
 				require.NoError(t, err)
 				assert.Equal(t, "BG", bankData.ISO2)
 				assert.Equal(t, "ABV INVESTMENTS LTD", bankData.Name)
 
-				keys, err := testRedis.SMembers(testCtx, "idx:countryISO2:BG").Result()
+				keys, err := testStore.client.SMembers(testCtx, "idx:countryISO2:BG").Result()
 				require.NoError(t, err)
 				assert.Contains(t, keys, "swiftCode:ABIEBGS1XXX")
 			},
@@ -213,10 +211,10 @@ func TestAddBankToRedis(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := testRedis.FlushDB(testCtx).Err()
+			err := testStore.client.FlushDB(testCtx).Err()
 			require.NoError(t, err)
 
-			err = AddBankToRedis(testRedis, tt.bank)
+			err = testStore.AddBankToDB(tt.bank)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -252,7 +250,7 @@ func TestDeleteBankFromRedis(t *testing.T) {
 					Country:  "ALBANIA",
 					Timezone: "Europe/Tirane",
 				}
-				err := AddBankToRedis(testRedis, bank)
+				err := testStore.AddBankToDB(bank)
 				require.NoError(t, err)
 			},
 			bank: DeleteBankParams{
@@ -260,11 +258,11 @@ func TestDeleteBankFromRedis(t *testing.T) {
 			},
 			wantErr: false,
 			verify: func(t *testing.T) {
-				exists, err := testRedis.Exists(testCtx, "swiftCode:AAISALTRXXX").Result()
+				exists, err := testStore.client.Exists(testCtx, "swiftCode:AAISALTRXXX").Result()
 				require.NoError(t, err)
 				assert.Equal(t, int64(0), exists)
 
-				keys, err := testRedis.SMembers(testCtx, "idx:countryISO2:AL").Result()
+				keys, err := testStore.client.SMembers(testCtx, "idx:countryISO2:AL").Result()
 				require.NoError(t, err)
 				assert.NotContains(t, keys, "swiftCode:AAISALTRXXX")
 			},
@@ -295,7 +293,7 @@ func TestDeleteBankFromRedis(t *testing.T) {
 					},
 				}
 				for _, bank := range banks {
-					err := AddBankToRedis(testRedis, bank)
+					err := testStore.AddBankToDB(bank)
 					require.NoError(t, err)
 				}
 			},
@@ -304,15 +302,15 @@ func TestDeleteBankFromRedis(t *testing.T) {
 			},
 			wantErr: false,
 			verify: func(t *testing.T) {
-				exists, err := testRedis.Exists(testCtx, "swiftCode:ABIEBGS1XXX").Result()
+				exists, err := testStore.client.Exists(testCtx, "swiftCode:ABIEBGS1XXX").Result()
 				require.NoError(t, err)
 				assert.Equal(t, int64(0), exists)
 
-				exists, err = testRedis.Exists(testCtx, "swiftCode:ADCRBGS1XXX").Result()
+				exists, err = testStore.client.Exists(testCtx, "swiftCode:ADCRBGS1XXX").Result()
 				require.NoError(t, err)
 				assert.Equal(t, int64(1), exists)
 
-				keys, err := testRedis.SMembers(testCtx, "idx:countryISO2:BG").Result()
+				keys, err := testStore.client.SMembers(testCtx, "idx:countryISO2:BG").Result()
 				require.NoError(t, err)
 				assert.NotContains(t, keys, "swiftCode:ABIEBGS1XXX")
 				assert.Contains(t, keys, "swiftCode:ADCRBGS1XXX")
@@ -325,7 +323,7 @@ func TestDeleteBankFromRedis(t *testing.T) {
 			},
 			wantErr: false,
 			verify: func(t *testing.T) {
-				err := DeleteBankFromRedis(testRedis, DeleteBankParams{Swift: "NONEXISTXXX"})
+				err := testStore.DeleteBankFromDB(DeleteBankParams{Swift: "NONEXISTXXX"})
 				assert.NoError(t, err)
 			},
 		},
@@ -333,14 +331,14 @@ func TestDeleteBankFromRedis(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := testRedis.FlushDB(testCtx).Err()
+			err := testStore.client.FlushDB(testCtx).Err()
 			require.NoError(t, err)
 
 			if tt.setup != nil {
 				tt.setup()
 			}
 
-			err = DeleteBankFromRedis(testRedis, tt.bank)
+			err = testStore.DeleteBankFromDB(tt.bank)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -356,7 +354,7 @@ func TestDeleteBankFromRedis(t *testing.T) {
 }
 
 func TestGetBanksByISO2(t *testing.T) {
-	if err := testRedis.FlushDB(testCtx).Err(); err != nil {
+	if err := testStore.client.FlushDB(testCtx).Err(); err != nil {
 		t.Fatalf("Failed to flush database: %v", err)
 	}
 
@@ -403,10 +401,10 @@ func TestGetBanksByISO2(t *testing.T) {
 			"isHeadquater": bank.data.Headquater,
 		}
 
-		if err := testRedis.HSet(testCtx, bank.key, bankData).Err(); err != nil {
+		if err := testStore.client.HSet(testCtx, bank.key, bankData).Err(); err != nil {
 			t.Fatalf("Failed to add test bank: %v", err)
 		}
-		if err := testRedis.SAdd(testCtx, iso2IndexKey+":"+bank.data.ISO2, bank.key).Err(); err != nil {
+		if err := testStore.client.SAdd(testCtx, iso2IndexKey+":"+bank.data.ISO2, bank.key).Err(); err != nil {
 			t.Fatalf("Failed to add bank to ISO2 index: %v", err)
 		}
 	}
@@ -442,7 +440,7 @@ func TestGetBanksByISO2(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := GetBanksByISO2(testRedis, tt.iso2)
+			got, err := testStore.GetBanksByISO2(tt.iso2)
 			if err != nil {
 				t.Errorf("GetBanksByISO2() error = %v", err)
 				return
@@ -502,7 +500,7 @@ func TestGetBankBranches(t *testing.T) {
 					Country:  "POLAND",
 					Timezone: "Europe/Warsaw",
 				}
-				err := AddBankToRedis(testRedis, headOffice)
+				err := testStore.AddBankToDB(headOffice)
 				require.NoError(t, err)
 
 				branches := []Bank{
@@ -528,11 +526,11 @@ func TestGetBankBranches(t *testing.T) {
 					},
 				}
 				for _, branch := range branches {
-					err := AddBankToRedis(testRedis, branch)
+					err := testStore.AddBankToDB(branch)
 					require.NoError(t, err)
 				}
 
-				members, err := testRedis.SMembers(testCtx, "branch:ALBPPLPW").Result()
+				members, err := testStore.client.SMembers(testCtx, "branch:ALBPPLPW").Result()
 				require.NoError(t, err)
 				assert.Contains(t, members, "ALBPPLPW001")
 				assert.Contains(t, members, "ALBPPLPW002")
@@ -569,7 +567,7 @@ func TestGetBankBranches(t *testing.T) {
 					Country:  "ALBANIA",
 					Timezone: "Europe/Tirane",
 				}
-				err := AddBankToRedis(testRedis, bank)
+				err := testStore.AddBankToDB(bank)
 				require.NoError(t, err)
 			},
 			want:    []GetBranchesBySwiftResult{},
@@ -586,14 +584,14 @@ func TestGetBankBranches(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := testRedis.FlushDB(testCtx).Err()
+			err := testStore.client.FlushDB(testCtx).Err()
 			require.NoError(t, err)
 
 			if tt.setup != nil {
 				tt.setup(t)
 			}
 
-			got, err := GetBankBranches(testRedis, tt.swift)
+			got, err := testStore.GetBankBranches(tt.swift)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -636,7 +634,7 @@ func TestGetBank(t *testing.T) {
 					Country:  "ALBANIA",
 					Timezone: "Europe/Tirane",
 				}
-				err := AddBankToRedis(testRedis, bank)
+				err := testStore.AddBankToDB(bank)
 				require.NoError(t, err)
 			},
 			want: &GetBankBySwiftResult{
@@ -663,7 +661,7 @@ func TestGetBank(t *testing.T) {
 					Country:  "POLAND",
 					Timezone: "Europe/Warsaw",
 				}
-				err := AddBankToRedis(testRedis, headOffice)
+				err := testStore.AddBankToDB(headOffice)
 				require.NoError(t, err)
 
 				branch := Bank{
@@ -676,7 +674,7 @@ func TestGetBank(t *testing.T) {
 					Country:  "POLAND",
 					Timezone: "Europe/Warsaw",
 				}
-				err = AddBankToRedis(testRedis, branch)
+				err = testStore.AddBankToDB(branch)
 				require.NoError(t, err)
 			},
 			want: &GetBankBySwiftResult{
@@ -710,7 +708,7 @@ func TestGetBank(t *testing.T) {
 					Country:  "ALBANIA",
 					Timezone: "Europe/Tirane",
 				}
-				err := AddBankToRedis(testRedis, bank)
+				err := testStore.AddBankToDB(bank)
 				require.NoError(t, err)
 			},
 			want: &GetBankBySwiftResult{
@@ -750,7 +748,7 @@ func TestGetBank(t *testing.T) {
 					},
 				}
 				for _, bank := range banks {
-					err := AddBankToRedis(testRedis, bank)
+					err := testStore.AddBankToDB(bank)
 					require.NoError(t, err)
 				}
 			},
@@ -778,7 +776,7 @@ func TestGetBank(t *testing.T) {
 					Country:  "UNITED STATES",
 					Timezone: "",
 				}
-				err := AddBankToRedis(testRedis, bank)
+				err := testStore.AddBankToDB(bank)
 				require.NoError(t, err)
 			},
 			want: &GetBankBySwiftResult{
@@ -795,14 +793,14 @@ func TestGetBank(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := testRedis.FlushDB(testCtx).Err()
+			err := testStore.client.FlushDB(testCtx).Err()
 			require.NoError(t, err)
 
 			if tt.setup != nil {
 				tt.setup(t)
 			}
 
-			got, err := GetBank(testRedis, tt.swift)
+			got, err := testStore.GetBankFromSwift(tt.swift)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -827,7 +825,7 @@ func TestGetCountryNameByISO2(t *testing.T) {
 			name: "successful_country_retrieval",
 			iso2: "PL",
 			setup: func(t *testing.T) {
-				err := testRedis.HSet(testCtx, "countries", "PL", "POLAND").Err()
+				err := testStore.client.HSet(testCtx, "countries", "PL", "POLAND").Err()
 				require.NoError(t, err)
 			},
 			want:    "POLAND",
@@ -837,7 +835,7 @@ func TestGetCountryNameByISO2(t *testing.T) {
 			name: "case_insensitive_code",
 			iso2: "mc",
 			setup: func(t *testing.T) {
-				err := testRedis.HSet(testCtx, "countries", "MC", "MONACO").Err()
+				err := testStore.client.HSet(testCtx, "countries", "MC", "MONACO").Err()
 				require.NoError(t, err)
 			},
 			want:    "MONACO",
@@ -854,7 +852,7 @@ func TestGetCountryNameByISO2(t *testing.T) {
 			name: "multiple_countries_in_db",
 			iso2: "DE",
 			setup: func(t *testing.T) {
-				err := testRedis.HSet(testCtx, "countries",
+				err := testStore.client.HSet(testCtx, "countries",
 					"DE", "GERMANY",
 					"FR", "FRANCE",
 					"IT", "ITALY",
@@ -875,7 +873,7 @@ func TestGetCountryNameByISO2(t *testing.T) {
 			name: "country_with_spaces",
 			iso2: "US",
 			setup: func(t *testing.T) {
-				err := testRedis.HSet(testCtx, "countries", "US", "UNITED STATES").Err()
+				err := testStore.client.HSet(testCtx, "countries", "US", "UNITED STATES").Err()
 				require.NoError(t, err)
 			},
 			want:    "UNITED STATES",
@@ -885,14 +883,14 @@ func TestGetCountryNameByISO2(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := testRedis.FlushDB(testCtx).Err()
+			err := testStore.client.FlushDB(testCtx).Err()
 			require.NoError(t, err)
 
 			if tt.setup != nil {
 				tt.setup(t)
 			}
 
-			got, err := GetCountryNameByISO2(testRedis, tt.iso2)
+			got, err := testStore.GetCountryNameByISO2(tt.iso2)
 
 			if tt.wantErr {
 				assert.Error(t, err)
@@ -927,7 +925,7 @@ func TestDeleteBanksBySwiftPrefix(t *testing.T) {
 					Country:  "CHILE",
 					Timezone: "Pacific/Easter",
 				}
-				err := AddBankToRedis(testRedis, hq)
+				err := testStore.AddBankToDB(hq)
 				require.NoError(t, err)
 
 				branches := []Bank{
@@ -954,13 +952,13 @@ func TestDeleteBanksBySwiftPrefix(t *testing.T) {
 				}
 
 				for _, branch := range branches {
-					err := AddBankToRedis(testRedis, branch)
+					err := testStore.AddBankToDB(branch)
 					require.NoError(t, err)
 				}
 			},
 			verify: func(t *testing.T) {
 				hqKey := bankKeyPrefix + "BCHICLRMXXX"
-				exists, err := testRedis.Exists(testCtx, hqKey).Result()
+				exists, err := testStore.client.Exists(testCtx, hqKey).Result()
 				require.NoError(t, err)
 				assert.Equal(t, int64(0), exists, "headquarters should be deleted")
 
@@ -969,18 +967,18 @@ func TestDeleteBanksBySwiftPrefix(t *testing.T) {
 					bankKeyPrefix + "BCHICLRM002",
 				}
 				for _, key := range branchKeys {
-					exists, err := testRedis.Exists(testCtx, key).Result()
+					exists, err := testStore.client.Exists(testCtx, key).Result()
 					require.NoError(t, err)
 					assert.Equal(t, int64(0), exists, "branch should be deleted: "+key)
 				}
 
 				branchSetKey := "branch:BCHICLRM"
-				exists, err = testRedis.Exists(testCtx, branchSetKey).Result()
+				exists, err = testStore.client.Exists(testCtx, branchSetKey).Result()
 				require.NoError(t, err)
 				assert.Equal(t, int64(0), exists, "branch set should be deleted")
 
 				isoKey := iso2IndexKey + ":CL"
-				members, err := testRedis.SMembers(testCtx, isoKey).Result()
+				members, err := testStore.client.SMembers(testCtx, isoKey).Result()
 				require.NoError(t, err)
 				assert.NotContains(t, members, hqKey, "ISO2 index should not contain HQ")
 				for _, branchKey := range branchKeys {
@@ -1003,17 +1001,17 @@ func TestDeleteBanksBySwiftPrefix(t *testing.T) {
 					Country:  "MONACO",
 					Timezone: "Europe/Monaco",
 				}
-				err := AddBankToRedis(testRedis, hq)
+				err := testStore.AddBankToDB(hq)
 				require.NoError(t, err)
 			},
 			verify: func(t *testing.T) {
 				hqKey := bankKeyPrefix + "AGRIMCM1XXX"
-				exists, err := testRedis.Exists(testCtx, hqKey).Result()
+				exists, err := testStore.client.Exists(testCtx, hqKey).Result()
 				require.NoError(t, err)
 				assert.Equal(t, int64(0), exists, "headquarters should be deleted")
 
 				isoKey := iso2IndexKey + ":MC"
-				members, err := testRedis.SMembers(testCtx, isoKey).Result()
+				members, err := testStore.client.SMembers(testCtx, isoKey).Result()
 				require.NoError(t, err)
 				assert.NotContains(t, members, hqKey, "ISO2 index should not contain HQ")
 			},
@@ -1025,7 +1023,7 @@ func TestDeleteBanksBySwiftPrefix(t *testing.T) {
 			setup:       nil,
 			verify: func(t *testing.T) {
 				branchSetKey := "branch:NONEXIST"
-				exists, err := testRedis.Exists(testCtx, branchSetKey).Result()
+				exists, err := testStore.client.Exists(testCtx, branchSetKey).Result()
 				require.NoError(t, err)
 				assert.Equal(t, int64(0), exists, "branch set should not exist")
 			},
@@ -1035,14 +1033,14 @@ func TestDeleteBanksBySwiftPrefix(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := testRedis.FlushDB(testCtx).Err()
+			err := testStore.client.FlushDB(testCtx).Err()
 			require.NoError(t, err)
 
 			if tt.setup != nil {
 				tt.setup(t)
 			}
 
-			err = DeleteBanksBySwiftPrefix(testRedis, tt.swiftPrefix)
+			err = testStore.DeleteBanksBySwiftPrefix(tt.swiftPrefix)
 
 			if tt.wantErr {
 				assert.Error(t, err)

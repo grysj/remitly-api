@@ -22,7 +22,7 @@ func (server *Server) getSwiftDetails(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	bank, err := db.GetBank(server.store, swiftCode)
+	bank, err := server.store.GetBankFromSwift(swiftCode)
 	if err != nil {
 		log.Printf("Error retrieving bank details: %v", err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -44,7 +44,7 @@ func (server *Server) getSwiftDetails(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if util.CheckIfHeadquater(swiftCode) {
-		branches, err := db.GetBankBranches(server.store, swiftCode)
+		branches, err := server.store.GetBankBranches(swiftCode)
 		if err != nil {
 			log.Printf("Error retrieving bank branches: %v", err)
 		}

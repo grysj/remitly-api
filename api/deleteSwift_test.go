@@ -11,7 +11,6 @@ import (
 )
 
 func TestDeleteSwift(t *testing.T) {
-	require.NoError(t, testRedis.FlushDB(testCtx).Err())
 
 	testBanks := []db.Bank{
 		{
@@ -38,7 +37,7 @@ func TestDeleteSwift(t *testing.T) {
 	}
 
 	for _, bank := range testBanks {
-		err := db.AddBankToRedis(testRedis, bank)
+		err := testServer.store.AddBankToDB(bank)
 		require.NoError(t, err)
 	}
 
@@ -71,8 +70,11 @@ func TestDeleteSwift(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+			testServer.store.CleanDB(testCtx)
 			path := "/v1/swift-codes/" + tt.swiftCode
 			req := httptest.NewRequest(http.MethodDelete, path, nil)
+			req.Header.Set("Authorization", "Bearer "+password)
+			t.Log(password)
 			w := httptest.NewRecorder()
 
 			testServer.router.ServeHTTP(w, req)

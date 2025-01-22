@@ -2,65 +2,48 @@ package api
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"os"
 	"testing"
 
 	"github.com/grysj/remitly-api/config"
-	"github.com/redis/go-redis/v9"
+	"github.com/grysj/remitly-api/db"
 )
 
 var (
 	testServer *Server
-	testRedis  *redis.Client
 	testCtx    context.Context
+	password   string
 )
 
 func TestMain(m *testing.M) {
 	log.Printf("Starting test setup...")
 	cfg := config.LoadConfig()
 	testCtx = context.Background()
-	redisAddr := fmt.Sprintf("%s:%s", cfg.RedisHost, cfg.RedisPort)
-
-	testRedis = redis.NewClient(&redis.Options{
-		Addr:     redisAddr,
-		Password: cfg.RedisPassword,
-		DB:       1,
+	testRedis, err := db.NewRedisStore(db.NewRedisStoreParams{
+		RedisHost:     cfg.RedisHost,
+		RedisPort:     cfg.RedisPort,
+		RedisPassword: cfg.RedisPassword,
+		RedisDB:       1,
 	})
-
-	pong, err := testRedis.Ping(testCtx).Result()
+	password = cfg.ApiPassword
 	if err != nil {
 		log.Fatalf("Could not connect to Redis: %v", err)
 	}
-	log.Printf("Redis connection successful: %s", pong)
-
-	if err := testRedis.FlushDB(testCtx).Err(); err != nil {
-		log.Fatalf("Could not flush test database: %v", err)
-	}
-	log.Printf("Database flushed successfully")
 
 	testServer, err = NewServer(testRedis, *cfg)
 	if err != nil {
 		log.Fatalf("Could not create test server: %v", err)
 	}
-	log.Printf("Server created successfully")
 
-	mux := testServer.router
-	if mux == nil {
-		log.Fatal("Server router is nil")
-	}
-	log.Printf("Server router initialized")
-
-	log.Printf("Starting tests...")
 	code := m.Run()
+	err = testServer.store.CleanDB(testCtx)
+	if err != nil {
 
-	log.Printf("Cleaning up...")
-	if err := testRedis.FlushDB(testCtx).Err(); err != nil {
-		log.Printf("Warning: Could not flush test database after tests: %v", err)
 	}
-	if err := testRedis.Close(); err != nil {
-		log.Printf("Warning: Could not close Redis connection: %v", err)
+	err = testServer.store.CloseConnection()
+	if err != nil {
+		log.Fatalf("Could not close connection: %v", err)
 	}
 	os.Exit(code)
 }

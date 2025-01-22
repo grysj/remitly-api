@@ -5,8 +5,6 @@ import (
 	"log"
 	"net/http"
 	"strings"
-
-	"github.com/grysj/remitly-api/db"
 )
 
 type BankInfo struct {
@@ -41,7 +39,7 @@ func (server *Server) getSwiftCodes(w http.ResponseWriter, r *http.Request) {
 		SwiftCodes:  make([]BankInfo, 0),
 	}
 
-	countryName, err := db.GetCountryNameByISO2(server.store, countryCode)
+	countryName, err := server.store.GetCountryNameByISO2(countryCode)
 	if err != nil {
 		log.Printf("Error retrieving country name for %s: %v", countryCode, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
@@ -50,7 +48,7 @@ func (server *Server) getSwiftCodes(w http.ResponseWriter, r *http.Request) {
 
 	response.CountryName = countryName
 
-	banks, err := db.GetBanksByISO2(server.store, countryCode)
+	banks, err := server.store.GetBanksByISO2(countryCode)
 	if err != nil {
 		log.Printf("Error retrieving banks for country %s: %v", countryCode, err)
 		http.Error(w, "Internal server error", http.StatusInternalServerError)

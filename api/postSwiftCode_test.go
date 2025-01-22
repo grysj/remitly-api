@@ -7,21 +7,18 @@ import (
 	"net/http/httptest"
 	"testing"
 
-	"github.com/grysj/remitly-api/db"
-	"github.com/redis/go-redis/v9"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestPostSwiftCode(t *testing.T) {
-	require.NoError(t, testRedis.FlushDB(testCtx).Err())
-
+	require.NoError(t, testServer.store.CleanDB(testCtx))
 	tests := []struct {
 		name           string
 		requestBody    postSwiftCodeReq
 		expectedStatus int
 		checkResponse  func(*testing.T, *httptest.ResponseRecorder)
-		checkRedis     func(*testing.T, *redis.Client)
+		checkRedis     func(*testing.T)
 	}{
 		{
 			name: "Successful Bank Addition",
@@ -41,10 +38,9 @@ func TestPostSwiftCode(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, "Bank added successfully", response.Message)
 			},
-			checkRedis: func(t *testing.T, client *redis.Client) {
-				banks, err := db.GetBanksByISO2(client, "MC")
+			checkRedis: func(t *testing.T) {
+				banks, err := testServer.store.GetBanksByISO2("MC")
 				require.NoError(t, err)
-
 				found := false
 				for _, bank := range banks {
 					if bank.Swift == "EXAMPLEMCXXX" {
@@ -54,7 +50,7 @@ func TestPostSwiftCode(t *testing.T) {
 						assert.Equal(t, "123 Example Street, Monaco", bank.Address)
 					}
 				}
-				assert.True(t, found, "Bank should be added to Redis")
+				assert.True(t, found)
 			},
 		},
 		{
@@ -68,10 +64,10 @@ func TestPostSwiftCode(t *testing.T) {
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
 				assert.Contains(t, w.Body.String(), "Swift code is required")
 			},
-			checkRedis: func(t *testing.T, client *redis.Client) {
-				banks, err := db.GetBanksByISO2(client, "MC")
+			checkRedis: func(t *testing.T) {
+				banks, err := testServer.store.GetBanksByISO2("MC")
 				require.NoError(t, err)
-				assert.Len(t, banks, 0, "No banks should be added")
+				assert.Len(t, banks, 0)
 			},
 		},
 		{
@@ -86,10 +82,10 @@ func TestPostSwiftCode(t *testing.T) {
 			checkResponse: func(t *testing.T, w *httptest.ResponseRecorder) {
 				assert.Contains(t, w.Body.String(), "Invalid country ISO2 code")
 			},
-			checkRedis: func(t *testing.T, client *redis.Client) {
-				banks, err := db.GetBanksByISO2(client, "MONACO")
+			checkRedis: func(t *testing.T) {
+				banks, err := testServer.store.GetBanksByISO2("MONACO")
 				require.NoError(t, err)
-				assert.Len(t, banks, 0, "No banks should be added")
+				assert.Len(t, banks, 0)
 			},
 		},
 		{
@@ -110,10 +106,9 @@ func TestPostSwiftCode(t *testing.T) {
 				require.NoError(t, err)
 				assert.Equal(t, "Bank added successfully", response.Message)
 			},
-			checkRedis: func(t *testing.T, client *redis.Client) {
-				banks, err := db.GetBanksByISO2(client, "MC")
+			checkRedis: func(t *testing.T) {
+				banks, err := testServer.store.GetBanksByISO2("MC")
 				require.NoError(t, err)
-
 				found := false
 				for _, bank := range banks {
 					if bank.Swift == "EXAMPLEMCXXX" {
@@ -122,29 +117,28 @@ func TestPostSwiftCode(t *testing.T) {
 						assert.Equal(t, "MC", bank.ISO2)
 					}
 				}
-				assert.True(t, found, "Bank should be added to Redis")
+				assert.True(t, found)
 			},
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			require.NoError(t, testRedis.FlushDB(testCtx).Err())
+			require.NoError(t, testServer.store.CleanDB(testCtx))
 
 			body, err := json.Marshal(tt.requestBody)
 			require.NoError(t, err)
 
-			path := "/v1/swift-codes"
-			req := httptest.NewRequest(http.MethodPost, path, bytes.NewBuffer(body))
+			req := httptest.NewRequest(http.MethodPost, "/v1/swift-codes", bytes.NewBuffer(body))
+			req.Header.Set("Authorization", "Bearer "+password)
 			req.Header.Set("Content-Type", "application/json")
-			w := httptest.NewRecorder()
 
+			w := httptest.NewRecorder()
 			testServer.router.ServeHTTP(w, req)
 
 			assert.Equal(t, tt.expectedStatus, w.Code)
 			tt.checkResponse(t, w)
-
-			tt.checkRedis(t, testRedis)
+			tt.checkRedis(t)
 		})
 	}
 }

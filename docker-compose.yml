@@ -11,6 +11,7 @@ services:
       - CV_PATH=${CV_PATH}
       - REDIS_HOST=redis
       - REDIS_PORT=6379
+      - API_PASSWORD=${API_PASSWORD}
     volumes:
       - ./${CV_PATH}:/app/${CV_PATH}
     depends_on:

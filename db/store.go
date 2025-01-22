@@ -14,9 +14,9 @@ const bankKeyPrefix = "swiftCode:"
 const iso2IndexKey = "idx:countryISO2"
 const countryCode = "countryISO2:name"
 
-func AddBanksToRedis(client *redis.Client, rows []parser.CsvRow) error {
+func (s *RedisStore) AddBanksFromCSV(rows []parser.CsvRow) error {
 	ctx := context.Background()
-	pipe := client.TxPipeline()
+	pipe := s.client.TxPipeline()
 
 	for _, row := range rows {
 		bankData := Bank{
@@ -45,9 +45,9 @@ func AddBanksToRedis(client *redis.Client, rows []parser.CsvRow) error {
 	return err
 }
 
-func AddBankToRedis(client *redis.Client, bank Bank) error {
+func (s *RedisStore) AddBankToDB(bank Bank) error {
 	ctx := context.Background()
-	pipe := client.TxPipeline()
+	pipe := s.client.TxPipeline()
 
 	if len(bank.ISO2) != 2 {
 		return fmt.Errorf("invalid ISO2 format: must be exactly 2 letters")
@@ -80,13 +80,13 @@ func AddBankToRedis(client *redis.Client, bank Bank) error {
 	return err
 }
 
-func DeleteBankFromRedis(client *redis.Client, bank DeleteBankParams) error {
+func (s *RedisStore) DeleteBankFromDB(bank DeleteBankParams) error {
 	ctx := context.Background()
-	pipe := client.TxPipeline()
+	pipe := s.client.TxPipeline()
 
 	bankKey := bankKeyPrefix + bank.Swift
 	bankData := &Bank{}
-	err := client.HGetAll(ctx, bankKey).Scan(bankData)
+	err := s.client.HGetAll(ctx, bankKey).Scan(bankData)
 	if err != nil {
 		return fmt.Errorf("failed to get bank data: %w", err)
 	}
@@ -98,9 +98,9 @@ func DeleteBankFromRedis(client *redis.Client, bank DeleteBankParams) error {
 	return err
 }
 
-func GetBanksByISO2(client *redis.Client, iso2 string) ([]GetBankByIsoResult, error) {
+func (s *RedisStore) GetBanksByISO2(iso2 string) ([]GetBankByIsoResult, error) {
 	ctx := context.Background()
-	bankKeys, err := client.SMembers(ctx, iso2IndexKey+":"+strings.ToUpper(iso2)).Result()
+	bankKeys, err := s.client.SMembers(ctx, iso2IndexKey+":"+strings.ToUpper(iso2)).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get bank keys for ISO2 %s: %w", iso2, err)
 	}
@@ -109,7 +109,7 @@ func GetBanksByISO2(client *redis.Client, iso2 string) ([]GetBankByIsoResult, er
 		return []GetBankByIsoResult{}, nil
 	}
 
-	pipe := client.Pipeline()
+	pipe := s.client.Pipeline()
 	cmds := make([]*redis.MapStringStringCmd, len(bankKeys))
 	for i, key := range bankKeys {
 		cmds[i] = pipe.HGetAll(ctx, key)
@@ -131,11 +131,11 @@ func GetBanksByISO2(client *redis.Client, iso2 string) ([]GetBankByIsoResult, er
 	return banks, nil
 }
 
-func GetBankBranches(client *redis.Client, swift string) ([]GetBranchesBySwiftResult, error) {
+func (s *RedisStore) GetBankBranches(swift string) ([]GetBranchesBySwiftResult, error) {
 	ctx := context.Background()
 	branchSet := "branch:" + util.GetPrefix(swift)
 
-	exists, err := client.Exists(ctx, branchSet).Result()
+	exists, err := s.client.Exists(ctx, branchSet).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to check branch set: %w", err)
 	}
@@ -143,7 +143,7 @@ func GetBankBranches(client *redis.Client, swift string) ([]GetBranchesBySwiftRe
 		return []GetBranchesBySwiftResult{}, nil
 	}
 
-	branchSwifts, err := client.SMembers(ctx, branchSet).Result()
+	branchSwifts, err := s.client.SMembers(ctx, branchSet).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get branch swifts: %w", err)
 	}
@@ -152,7 +152,7 @@ func GetBankBranches(client *redis.Client, swift string) ([]GetBranchesBySwiftRe
 		return []GetBranchesBySwiftResult{}, nil
 	}
 
-	pipe := client.Pipeline()
+	pipe := s.client.Pipeline()
 	cmds := make([]*redis.MapStringStringCmd, len(branchSwifts))
 	for i, branchSwift := range branchSwifts {
 		cmds[i] = pipe.HGetAll(ctx, bankKeyPrefix+branchSwift)
@@ -174,11 +174,11 @@ func GetBankBranches(client *redis.Client, swift string) ([]GetBranchesBySwiftRe
 	return branches, nil
 }
 
-func GetBank(client *redis.Client, swift string) (*GetBankBySwiftResult, error) {
+func (s *RedisStore) GetBankFromSwift(swift string) (*GetBankBySwiftResult, error) {
 	ctx := context.Background()
 	bankKey := bankKeyPrefix + strings.ToUpper(swift)
 
-	exists, err := client.Exists(ctx, bankKey).Result()
+	exists, err := s.client.Exists(ctx, bankKey).Result()
 	if err != nil {
 		return nil, fmt.Errorf("failed to check bank existence: %w", err)
 	}
@@ -186,7 +186,7 @@ func GetBank(client *redis.Client, swift string) (*GetBankBySwiftResult, error) 
 		return nil, nil
 	}
 
-	cmd := client.HGetAll(ctx, bankKey)
+	cmd := s.client.HGetAll(ctx, bankKey)
 	if cmd.Err() != nil {
 		return nil, fmt.Errorf("failed to retrieve bank data: %w", cmd.Err())
 	}
@@ -200,17 +200,16 @@ func GetBank(client *redis.Client, swift string) (*GetBankBySwiftResult, error) 
 	return &bank, nil
 }
 
-func DeleteBanksBySwiftPrefix(client *redis.Client, swiftPrefix string) error {
+func (s *RedisStore) DeleteBanksBySwiftPrefix(swiftPrefix string) error {
 	ctx := context.Background()
-
 	hqKey := bankKeyPrefix + swiftPrefix + "XXX"
 	var hqBank Bank
-	err := client.HGetAll(ctx, hqKey).Scan(&hqBank)
+	err := s.client.HGetAll(ctx, hqKey).Scan(&hqBank)
 	if err != nil && err != redis.Nil {
 		return fmt.Errorf("failed to get headquarters info: %w", err)
 	}
 
-	pipe := client.Pipeline()
+	pipe := s.client.Pipeline()
 
 	if hqBank.ISO2 != "" {
 		pipe.SRem(ctx, iso2IndexKey+":"+hqBank.ISO2, hqKey)
@@ -218,7 +217,7 @@ func DeleteBanksBySwiftPrefix(client *redis.Client, swiftPrefix string) error {
 	}
 
 	branchSetKey := "branch:" + swiftPrefix
-	branchSwifts, err := client.SMembers(ctx, branchSetKey).Result()
+	branchSwifts, err := s.client.SMembers(ctx, branchSetKey).Result()
 	if err != nil && err != redis.Nil {
 		return fmt.Errorf("failed to get branch members: %w", err)
 	}
@@ -226,7 +225,7 @@ func DeleteBanksBySwiftPrefix(client *redis.Client, swiftPrefix string) error {
 	for _, swift := range branchSwifts {
 		bankKey := bankKeyPrefix + swift
 		var branch Bank
-		err := client.HGetAll(ctx, bankKey).Scan(&branch)
+		err := s.client.HGetAll(ctx, bankKey).Scan(&branch)
 		if err == nil && branch.ISO2 != "" {
 			pipe.SRem(ctx, iso2IndexKey+":"+branch.ISO2, bankKey)
 		}
@@ -242,7 +241,7 @@ func DeleteBanksBySwiftPrefix(client *redis.Client, swiftPrefix string) error {
 		return fmt.Errorf("failed to execute deletion pipeline: %w", err)
 	}
 
-	exists, err := client.Exists(ctx, hqKey).Result()
+	exists, err := s.client.Exists(ctx, hqKey).Result()
 	if err != nil {
 		return fmt.Errorf("failed to verify cleanup: %w", err)
 	}
@@ -253,9 +252,9 @@ func DeleteBanksBySwiftPrefix(client *redis.Client, swiftPrefix string) error {
 	return nil
 }
 
-func GetCountryNameByISO2(client *redis.Client, iso2 string) (string, error) {
+func (s *RedisStore) GetCountryNameByISO2(iso2 string) (string, error) {
 	ctx := context.Background()
-	countryName, err := client.HGet(ctx, "countries", strings.ToUpper(iso2)).Result()
+	countryName, err := s.client.HGet(ctx, "countries", strings.ToUpper(iso2)).Result()
 	if err == redis.Nil {
 		return "", nil
 	}

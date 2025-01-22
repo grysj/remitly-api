@@ -12,8 +12,7 @@ import (
 )
 
 func TestGetSwiftCodes(t *testing.T) {
-	require.NoError(t, testRedis.FlushDB(testCtx).Err())
-
+	testServer.store.CleanDB(testCtx)
 	chileHQ := db.Bank{
 		Swift:      "BCHICLRMXXX",
 		ISO2:       "CL",
@@ -25,7 +24,7 @@ func TestGetSwiftCodes(t *testing.T) {
 		Timezone:   "Pacific/Easter",
 		Headquater: true,
 	}
-	err := db.AddBankToRedis(testRedis, chileHQ)
+	err := testServer.store.AddBankToDB(chileHQ)
 	require.NoError(t, err)
 
 	chileBranches := []db.Bank{
@@ -54,7 +53,7 @@ func TestGetSwiftCodes(t *testing.T) {
 	}
 
 	for _, branch := range chileBranches {
-		err := db.AddBankToRedis(testRedis, branch)
+		err := testServer.store.AddBankToDB(branch)
 		require.NoError(t, err)
 	}
 
@@ -84,7 +83,7 @@ func TestGetSwiftCodes(t *testing.T) {
 	}
 
 	for _, bank := range monacoBanks {
-		err := db.AddBankToRedis(testRedis, bank)
+		err := testServer.store.AddBankToDB(bank)
 		require.NoError(t, err)
 	}
 
@@ -194,6 +193,7 @@ func TestGetSwiftCodes(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
+
 			path := "/v1/swift-codes/country/" + tt.countryCode
 			req := httptest.NewRequest(http.MethodGet, path, nil)
 			w := httptest.NewRecorder()

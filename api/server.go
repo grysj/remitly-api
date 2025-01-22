@@ -6,16 +6,16 @@ import (
 	"net/http"
 
 	"github.com/grysj/remitly-api/config"
-	"github.com/redis/go-redis/v9"
+	"github.com/grysj/remitly-api/db"
 	"github.com/rs/cors"
 )
 
 type Server struct {
-	store  *redis.Client
+	store  *db.Store
 	router http.Handler
 }
 
-func NewServer(store *redis.Client, cfg config.Config) (*Server, error) {
+func NewServer(store *db.Store, cfg config.Config) (*Server, error) {
 
 	mux := http.NewServeMux()
 
@@ -25,8 +25,8 @@ func NewServer(store *redis.Client, cfg config.Config) (*Server, error) {
 
 	mux.HandleFunc("GET /v1/swift-codes/{swiftcode...}", server.getSwiftDetails)
 	mux.HandleFunc("GET /v1/swift-codes/country/{countryISO2code...}", server.getSwiftCodes)
-	mux.HandleFunc("POST /v1/swift-codes", server.postSwiftCode)
-	mux.HandleFunc("DELETE /v1/swift-codes/{swiftcode...}", server.deleteSwift)
+	mux.HandleFunc("POST /v1/swift-codes", Middleware(cfg.ApiPassword, server.postSwiftCode))
+	mux.HandleFunc("DELETE /v1/swift-codes/{swiftcode...}", Middleware(cfg.ApiPassword, server.deleteSwift))
 	mux.HandleFunc("/", server.notFoundHandler)
 
 	c := cors.New(cors.Options{

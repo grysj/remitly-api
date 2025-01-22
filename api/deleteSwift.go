@@ -23,9 +23,9 @@ func (server *Server) deleteSwift(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Failed to delete bank", http.StatusBadRequest)
 			return
 		}
-		deleteErr = db.DeleteBanksBySwiftPrefix(server.store, prefix)
+		deleteErr = server.store.DeleteBanksBySwiftPrefix(prefix)
 	} else {
-		deleteErr = db.DeleteBankFromRedis(server.store, db.DeleteBankParams{
+		deleteErr = server.store.DeleteBankFromDB(db.DeleteBankParams{
 			Swift: swiftCode,
 		})
 	}

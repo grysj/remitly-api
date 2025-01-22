@@ -42,7 +42,7 @@ func (server *Server) postSwiftCode(w http.ResponseWriter, r *http.Request) {
 		Country: strings.ToUpper(newBank.CountryName),
 	}
 
-	err := db.AddBankToRedis(server.store, bankToAdd)
+	err := server.store.AddBankToDB(bankToAdd)
 	if err != nil {
 		log.Printf("Error adding bank: %v", err)
 		http.Error(w, "Failed to add bank", http.StatusInternalServerError)

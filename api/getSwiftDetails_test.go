@@ -12,7 +12,6 @@ import (
 )
 
 func TestGetSwiftDetails(t *testing.T) {
-	require.NoError(t, testRedis.FlushDB(testCtx).Err())
 
 	testHQ := db.Bank{
 		Swift:      "AKBKMTMTXXX",
@@ -25,7 +24,7 @@ func TestGetSwiftDetails(t *testing.T) {
 		Timezone:   "Europe/Malta",
 		Headquater: true,
 	}
-	err := db.AddBankToRedis(testRedis, testHQ)
+	err := testServer.store.AddBankToDB(testHQ)
 	require.NoError(t, err)
 
 	testBranch := db.Bank{
@@ -39,7 +38,7 @@ func TestGetSwiftDetails(t *testing.T) {
 		Timezone:   "Europe/Warsaw",
 		Headquater: false,
 	}
-	err = db.AddBankToRedis(testRedis, testBranch)
+	err = testServer.store.AddBankToDB(testBranch)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -121,4 +120,5 @@ func TestGetSwiftDetails(t *testing.T) {
 			tt.checkResponse(t, w)
 		})
 	}
+	testServer.store.CleanDB(testCtx)
 }

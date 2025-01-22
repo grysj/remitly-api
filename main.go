@@ -1,44 +1,42 @@
 package main
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/grysj/remitly-api/api"
 	"github.com/grysj/remitly-api/config"
 	"github.com/grysj/remitly-api/db"
 	"github.com/grysj/remitly-api/parser"
-	"github.com/redis/go-redis/v9"
 )
 
 func main() {
 	cfg := config.LoadConfig()
-	redisAddr := fmt.Sprintf("%s:%s", cfg.RedisHost, cfg.RedisPort)
-	conn := redis.NewClient(&redis.Options{
-		Addr:     redisAddr,
-		Password: cfg.RedisPassword,
-		DB:       0,
+
+	store, err := db.NewRedisStore(db.NewRedisStoreParams{
+		RedisDB:       0,
+		RedisHost:     cfg.RedisHost,
+		RedisPort:     cfg.RedisPort,
+		RedisPassword: cfg.RedisPassword,
 	})
+	if err != nil {
+		log.Fatalf("Could not connect to Redis: %v", err)
+	}
 
 	parsed, err := parser.ParseCSV(cfg.CsvPath)
 	if err != nil {
-		log.Fatal("cannot parse file:", err)
+		log.Fatalf("cannot parse file: %v", err)
 	}
 
-	err = db.AddBanksToRedis(conn, parsed)
+	if err := store.AddBanksFromCSV(parsed); err != nil {
+		log.Fatalf("cannot init db: %v", err)
+	}
+
+	server, err := api.NewServer(store, *cfg)
 	if err != nil {
-		log.Fatal("cannot init db:", err)
+		log.Fatalf("cannot configure server: %v", err)
 	}
 
-	server, err := api.NewServer(conn, *cfg)
-	if err != nil {
-		log.Fatal("cannot configure server:", err)
+	if err := server.StartServer("8080"); err != nil {
+		log.Fatalf("cannot start server: %v", err)
 	}
-
-	err = server.StartServer("8080")
-
-	if err != nil {
-		log.Fatal("cannot start server:", err)
-	}
-
 }

@@ -6,18 +6,17 @@ import (
 )
 
 type Config struct {
-	// CORS Configuration
 	CorsAllowedOrigins []string
 	CorsAllowedMethods []string
 	CorsAllowedHeaders []string
 
-	// Redis Configuration
 	RedisHost     string
 	RedisPort     string
 	RedisPassword string
 
-	// File Path
 	CsvPath string
+
+	ApiPassword string
 }
 
 func LoadConfig() *Config {
@@ -30,7 +29,8 @@ func LoadConfig() *Config {
 		RedisPort:     getEnvOrDefault("REDIS_PORT", "6379"),
 		RedisPassword: getEnvOrDefault("REDIS_PASSWORD", ""),
 
-		CsvPath: getEnvOrDefault("CV_PATH", "SWIFT_CODES.csv"),
+		CsvPath:     getEnvOrDefault("CV_PATH", "SWIFT_CODES.csv"),
+		ApiPassword: getEnvOrDefault("API_PASSWORD", "secret123"),
 	}
 }
 
